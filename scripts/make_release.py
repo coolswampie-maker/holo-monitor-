@@ -21,6 +21,8 @@ from holocyt.version import VERSION, PRODUCT          # noqa: E402
 NAME = f"HOLOCYT_WINDOWS_TRANSFER_{VERSION}"
 RELEASE = ROOT / "release"
 DEST = RELEASE / NAME
+#: Имя каталога готовой сборки, как его делает build/finalize.py.
+BUILT_NAME = "ГОЛОЦИТ"
 
 # Что кладём. Слева — источник, справа — место в комплекте.
 APP_TREE = ["holocyt", "models", "scripts"]
@@ -35,6 +37,9 @@ IGNORE = shutil.ignore_patterns(
     "__pycache__", "*.pyc", "*.pyo", ".DS_Store", ".git*",
     ".venv*", "build_cache", "dist", "release", "out", "logs",
     "*.cdr", "*.exe", "recovery", "vendor", "demo_data",
+    # Рабочий каталог PyInstaller build/build: 44 МБ промежуточных
+    # файлов сборки, которые в поставке не нужны и только путают.
+    "build",
     # Скрипты исследований — в комплект не нужны.
     "train_models.py", "make_demo.py", "match_real.py",
     "compare_hstudio.py", "benchmark_segmentation.py",
@@ -91,6 +96,24 @@ def build():
         if src.exists():
             shutil.copytree(src, DEST / name, ignore=IGNORE)
             print(f"  {name + '/':15s} {sum(1 for _ in (DEST / name).rglob('*') if _.is_file())} файлов")
+
+    # --- готовая сборка, если она есть -----------------------------------
+    # Кладём, чтобы комплект запускался сразу: Python нужен только для
+    # пересборки. Каталоги out/ и logs/ переносятся пустыми — результаты
+    # чужих прогонов в поставке не нужны.
+    built = ROOT / "dist" / BUILT_NAME
+    if built.exists():
+        shutil.copytree(built, DEST / "dist" / BUILT_NAME,
+                        ignore=shutil.ignore_patterns(
+                            "__pycache__", "*.pyc", ".DS_Store",
+                            "out", "logs", "*.bak"))
+        for d in ("out", "logs"):
+            (DEST / "dist" / BUILT_NAME / d).mkdir(exist_ok=True)
+        size = sum(f.stat().st_size
+                   for f in (DEST / "dist").rglob("*") if f.is_file())
+        print(f"  dist/           готовая сборка, {size / 1e6:.0f} МБ")
+    else:
+        print("  dist/           готовой сборки нет — комплект только с исходниками")
 
     # --- документация --------------------------------------------------
     docs = DEST / "docs"
