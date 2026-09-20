@@ -36,10 +36,23 @@ hiddenimports = [
     "sklearn.covariance",
     "sklearn.preprocessing",
     "sklearn.tree._utils",
-    "scipy.special._cdflib",
     "skimage.feature._basic_features",
     "matplotlib.backends.backend_agg",
     "matplotlib.backends.backend_pdf",
+    # Ниже — модули, которые подгружаются из скомпилированного кода, а не
+    # обычным оператором import. PyInstaller разбирает только исходный
+    # текст на Python, поэтому такие зависимости он не видит. Штатные
+    # hook-файлы PyInstaller 6.11.1 их не перечисляют: они старше numpy
+    # 2.4 и scipy 1.17. Без каждой из этих строк собранное приложение
+    # падает при запуске, хотя из исходников работает.
+    #
+    #   numpy._core._exceptions — грузится из _multiarray_umath; без него
+    #     отказывает «import numpy».
+    #   scipy._cyutility — грузится из scipy._lib._ccallback_c; без него
+    #     «import scipy» отказывает с сообщением «The `scipy` install you
+    #     are using seems to be broken».
+    "numpy._core._exceptions",
+    "scipy._cyutility",
 ]
 
 # Тяжёлое и ненужное в runtime.

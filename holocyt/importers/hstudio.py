@@ -197,6 +197,20 @@ class HstudioExperiment:
         return out
 
 
+#: Файлы и каталоги, по которым выгрузка Hstudio опознаётся сама по себе,
+#: без обращения к картам фазы.
+HSTUDIO_MARKERS = ("imagedb.xml", "DBTransferInfo.xml", "phidbdata.sdf")
+
+
+def _looks_like_hstudio(path):
+    """Есть ли у каталога признаки Hstudio помимо самих карт фазы."""
+    if any((path / m).exists() for m in HSTUDIO_MARKERS):
+        return True
+    if (path / "Storage").is_dir():
+        return True
+    return next(path.rglob("PhaseMatrixStorage"), None) is not None
+
+
 def detect(path):
     """Распознаёт каталог Hstudio. Возвращает имя раскладки или None."""
     path = Path(path)
@@ -213,7 +227,12 @@ def detect(path):
 
     if _has(FMX_SUFFIXES):
         return "loose"            # просто карты фазы россыпью
-    if _has(UNSUPPORTED_SUFFIXES):
+    # Расширение .bin само по себе признаком выгрузки Hstudio не является:
+    # такие файлы лежат в множестве системных каталогов, и C:\Windows\System32
+    # опознавался как эксперимент. Неподдержанной выгрузкой каталог считается
+    # только при собственных признаках Hstudio. Поддержку .bin это не
+    # добавляет: формат по-прежнему отклоняется с пояснением.
+    if _looks_like_hstudio(path) and _has(UNSUPPORTED_SUFFIXES):
         return "unsupported"      # есть карты фазы, но неподдержанной версии
     return None
 

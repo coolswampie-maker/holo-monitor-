@@ -12,6 +12,7 @@ import io
 import json
 import math
 import mimetypes
+import sys
 import threading
 import traceback
 import urllib.parse
@@ -26,14 +27,22 @@ from . import parameters as pm
 from .calibration import Calibration, from_user
 from .experiment import Experiment
 from .features import DIRECT_COLUMNS, CALIBRATED_COLUMNS, DERIVED_COLUMNS
-from .importers.hstudio import detect, load_experiment, read_phase_matrix
+from .importers.hstudio import (detect, load_experiment, read_phase_matrix,
+                                UnsupportedFormat)
 from .report import build_report, overlay_axes
 from .synth import CLASS_RU, CLASS_COLOR, DISPLAY_CLASSES
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = Path(__file__).resolve().parent / "web"
-OUT = ROOT / "out"
 DEMO = ROOT / "demo_data" / "M4_demo_8"
+
+# Читаемые ресурсы (интерфейс, демо) лежат внутри сборки, рядом с модулем,
+# поэтому для них годится ROOT. Результаты работы — нет: в упакованном виде
+# ROOT указывает на служебный каталог _internal, и выгрузка уходила бы туда,
+# а пользователь смотрел бы в пустую папку out рядом с программой.
+from .diagnostics.logs import app_root as _app_root   # noqa: E402
+
+OUT = _app_root() / "out"
 
 STATE = {"running": False, "done": False, "error": None, "progress": 0,
          "total": 0, "message": "Готов к работе", "experiment": None,
@@ -62,7 +71,13 @@ def inspect(path):
                          f"Ожидается каталог с imagedb.xml и Storage/, "
                          f"либо с DBTransferInfo.xml, либо с файлами "
                          f"*.fmx / *.bin."}
-    h = load_experiment(path)
+    # Неподдержанный формат и нечитаемый каталог — это сообщение
+    # пользователю, а не сбой программы. Без этого запрос возвращал
+    # HTTP 500 и в интерфейсе не оставалось никакого пояснения.
+    try:
+        h = load_experiment(path)
+    except (UnsupportedFormat, FileNotFoundError) as e:
+        return {"ok": False, "error": str(e)}
     pmx = read_phase_matrix(h.phase_files[0])
     cal = h.calibration
     return {
@@ -95,10 +110,15 @@ def _run(path, cal, min_area_px, method):
             STATE["total"] = len(ex.records)
 
         def prog(i, n, name, fr):
+            # fr равен None, когда кадр не прочитался: Experiment.run()
+            # такие пропускает и сообщает о них отдельно. Обращаться к
+            # fr.n_cells без проверки нельзя — иначе один повреждённый
+            # файл ронял весь анализ, хотя остальные кадры уже посчитаны.
+            tail = (f"объектов {fr.n_cells}" if fr is not None
+                    else "пропущен, файл не прочитан")
             with LOCK:
                 STATE.update(progress=i, total=n,
-                             message=f"Кадр {i} из {n}: {Path(name).name} — "
-                                     f"объектов {fr.n_cells}")
+                             message=f"Кадр {i} из {n}: {Path(name).name} — {tail}")
 
         ex.run(method=method, progress=prog, min_area_px=min_area_px)
 
@@ -330,7 +350,14 @@ def find_free_port(preferred=8765, host="127.0.0.1", tries=40):
     import socket
     for port in [preferred] + list(range(preferred + 1, preferred + tries)):
         with socket.socket() as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # SO_REUSEADDR здесь ставить нельзя. На Windows эта опция
+            # разрешает двум сокетам занять один и тот же адрес, поэтому
+            # привязка к уже слушаемому порту удаётся, и порт всегда
+            # объявляется свободным: второй экземпляр программы молча
+            # вставал на порт первого и не отвечал. На Windows нужна
+            # исключительная привязка, на прочих системах — обычная.
+            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             try:
                 s.bind((host, port))
                 return port
@@ -341,16 +368,35 @@ def find_free_port(preferred=8765, host="127.0.0.1", tries=40):
         return s.getsockname()[1]
 
 
+class _Server(ThreadingHTTPServer):
+    """HTTP-сервер программы.
+
+    allow_reuse_address на Windows означает SO_REUSEADDR, то есть
+    разрешение встать на чужой занятый порт. Оставлять его нельзя по той
+    же причине, что и в find_free_port.
+    """
+
+    allow_reuse_address = not sys.platform.startswith("win")
+
+
 def serve(host="127.0.0.1", port=None, open_browser=True):
     from .diagnostics import setup_logging, log_path
     log = setup_logging()
     port = find_free_port(port or 8765, host)
-    srv = ThreadingHTTPServer((host, port), Handler)
+    srv = _Server((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"\n  {__product__} {__version__}")
     print(f"  Интерфейс: {url}")
     print(f"  Журнал:    {log_path()}")
     print(f"  Остановить: закройте это окно или нажмите Ctrl+C\n")
+    # Дальше программа уходит в serve_forever и больше ничего не печатает.
+    # При перенаправлении вывода поток блочно буферизован, и адрес
+    # интерфейса до пользователя не доходил — а это единственное место,
+    # где он написан, если браузер не открылся.
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
     log.info("Веб-интерфейс слушает %s", url)
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
