@@ -31,7 +31,11 @@ sys.path.insert(0, str(ROOT))
 
 IS_WINDOWS = sys.platform.startswith("win")
 CHECKS = []
-PASS, FAIL, SKIP = "PASS", "FAIL", "NOT TESTED"
+PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
+
+
+class Skipped(Exception):
+    """Проверку выполнить нечем. Пройденной она не считается."""
 
 
 def check(name, windows_only=False):
@@ -86,10 +90,39 @@ def _model_env():
     return "модели загружаются текущими версиями библиотек"
 
 
+def demo_dir():
+    """Каталог демонстрационного эксперимента — по тому же правилу, что в
+    программе.
+
+    Официальная раскладка одна: `demo_data/M4_demo_8` рядом с пакетом
+    `holocyt`. Из исходников это корень комплекта, в собранном виде —
+    служебный каталог `_internal`, куда PyInstaller кладёт ресурсы по
+    описанию сборки. Считать этот путь отдельно в каждом файле нельзя:
+    так и появляется расхождение между запуском из исходников и из .exe.
+    """
+    import holocyt
+    return Path(holocyt.__file__).resolve().parent.parent / "demo_data" / "M4_demo_8"
+
+
+DEMO = demo_dir()
+
+
+def need_demo():
+    """Проверки на настоящих кадрах M4 без самих кадров не выполняются.
+
+    Их отсутствие — это SKIP, а не FAIL: программу оно не обвиняет.
+    Отдельная проверка «Демонстрационный эксперимент» при этом падает,
+    поэтому незамеченным отсутствие данных не останется.
+    """
+    if not DEMO.exists():
+        raise Skipped(f"демонстрационный эксперимент не установлен: {DEMO}")
+    return DEMO
+
+
 @check("Демонстрационный эксперимент")
 def _demo():
     from holocyt.importers.hstudio import detect, load_experiment
-    demo = ROOT / "demo_data" / "M4_demo_8"
+    demo = demo_dir()
     if not demo.exists():
         raise AssertionError(f"не найден: {demo}")
     if detect(demo) != "experiment":
@@ -101,7 +134,7 @@ def _demo():
 @check("Чтение карты фазы")
 def _phase():
     from holocyt.importers.hstudio import load_experiment, read_phase_matrix
-    ex = load_experiment(ROOT / "demo_data" / "M4_demo_8")
+    ex = load_experiment(need_demo())
     pm = read_phase_matrix(ex.phase_files[0])
     return (f"{pm.path.name}: {pm.width}x{pm.height}, {pm.version}, "
             f"фаза {pm.phase.min():+.3f}…{pm.phase.max():+.3f}")
@@ -124,7 +157,7 @@ def _segment():
     from holocyt.importers.hstudio import load_experiment, read_phase_matrix
     from holocyt.pipeline import analyze_field
     from holocyt.calibration import from_user
-    ex = load_experiment(ROOT / "demo_data" / "M4_demo_8")
+    ex = load_experiment(need_demo())
     pm = read_phase_matrix(ex.phase_files[0])
     fr = analyze_field(pm.phase, name=pm.path.name,
                        cal=from_user(0.3359375, 0.633, 1.38, 1.34))
@@ -138,7 +171,7 @@ def _pdf():
     from holocyt.experiment import Experiment
     from holocyt.report import build_report
     from holocyt.calibration import from_user
-    ex = Experiment.from_hstudio(ROOT / "demo_data" / "M4_demo_8",
+    ex = Experiment.from_hstudio(need_demo(),
                                  cal=from_user(0.3359375, 0.633, 1.38, 1.34))
     ex.records = ex.records[:2]
     ex.run()
@@ -153,7 +186,7 @@ def _pdf():
 def _csv():
     from holocyt.experiment import Experiment
     from holocyt.export import export_all
-    ex = Experiment.from_hstudio(ROOT / "demo_data" / "M4_demo_8")
+    ex = Experiment.from_hstudio(need_demo())
     ex.records = ex.records[:1]
     ex.run()
     with tempfile.TemporaryDirectory() as t:
@@ -177,7 +210,7 @@ def _unicode_path():
     from holocyt.importers.hstudio import detect
     with tempfile.TemporaryDirectory() as t:
         d = Path(t) / "Исследования 2026" / "Опыт № 1 (копия)"
-        shutil.copytree(ROOT / "demo_data" / "M4_demo_8", d)
+        shutil.copytree(need_demo(), d)
         if detect(d) != "experiment":
             raise AssertionError("эксперимент по такому пути не распознан")
         return f"{d.parent.name}/{d.name} — прочитан"
@@ -307,7 +340,6 @@ def main():
     print(f"\n{PRODUCT} — самодиагностика")
     print(f"версия {VERSION}, платформа {sys.platform}\n")
 
-    width = max(len(n) for n, _, _ in CHECKS) + 2
     n_pass = n_fail = n_skip = 0
     for name, fn, win_only in CHECKS:
         if win_only and not IS_WINDOWS:
@@ -317,25 +349,38 @@ def main():
             continue
         try:
             detail = fn()
-            print(f"[{PASS}] {name}")
-            if detail:
-                print(f"          {detail}")
-            n_pass += 1
+        except Skipped as e:
+            print(f"[{SKIP}] {name}")
+            print(f"          {e}")
+            n_skip += 1
+            continue
         except Exception as e:
             print(f"[{FAIL}] {name}")
             print(f"          {type(e).__name__}: {e}")
             for line in traceback.format_exc().splitlines()[-3:-1]:
                 print(f"          {line.strip()}")
             n_fail += 1
+            continue
+        print(f"[{PASS}] {name}")
+        if detail:
+            print(f"          {detail}")
+        n_pass += 1
 
-    total = n_pass + n_fail
-    print(f"\n{n_pass} / {total} PASS", end="")
-    if n_skip:
-        print(f", {n_skip} NOT TESTED (требуют Windows)", end="")
-    print()
+    # Пропущенная проверка не засчитывается пройденной, и знаменатель
+    # равен общему числу проверок. Иначе на платформе, где часть проверок
+    # пропускается, получается завышенная оценка вида «15 / 15».
+    total = len(CHECKS)
+    print(f"\n{total} проверок")
+    print(f"{n_pass} PASS")
+    print(f"{n_fail} FAIL")
+    print(f"{n_skip} SKIP")
     if n_fail:
         print("\nСистема к работе НЕ готова. Причины указаны выше.\n")
         return 1
+    if n_skip:
+        print("\nОтказов нет, но часть проверок не выполнялась — "
+              "см. SKIP выше.\n")
+        return 0
     print("\nСистема готова к работе.\n")
     return 0
 

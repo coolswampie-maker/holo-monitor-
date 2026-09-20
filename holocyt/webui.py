@@ -27,7 +27,8 @@ from . import parameters as pm
 from .calibration import Calibration, from_user
 from .experiment import Experiment
 from .features import DIRECT_COLUMNS, CALIBRATED_COLUMNS, DERIVED_COLUMNS
-from .importers.hstudio import detect, load_experiment, read_phase_matrix
+from .importers.hstudio import (detect, load_experiment, read_phase_matrix,
+                                UnsupportedFormat)
 from .report import build_report, overlay_axes
 from .synth import CLASS_RU, CLASS_COLOR, DISPLAY_CLASSES
 
@@ -70,7 +71,13 @@ def inspect(path):
                          f"Ожидается каталог с imagedb.xml и Storage/, "
                          f"либо с DBTransferInfo.xml, либо с файлами "
                          f"*.fmx / *.bin."}
-    h = load_experiment(path)
+    # Неподдержанный формат и нечитаемый каталог — это сообщение
+    # пользователю, а не сбой программы. Без этого запрос возвращал
+    # HTTP 500 и в интерфейсе не оставалось никакого пояснения.
+    try:
+        h = load_experiment(path)
+    except (UnsupportedFormat, FileNotFoundError) as e:
+        return {"ok": False, "error": str(e)}
     pmx = read_phase_matrix(h.phase_files[0])
     cal = h.calibration
     return {
@@ -377,6 +384,14 @@ def serve(host="127.0.0.1", port=None, open_browser=True):
     print(f"  Интерфейс: {url}")
     print(f"  Журнал:    {log_path()}")
     print(f"  Остановить: закройте это окно или нажмите Ctrl+C\n")
+    # Дальше программа уходит в serve_forever и больше ничего не печатает.
+    # При перенаправлении вывода поток блочно буферизован, и адрес
+    # интерфейса до пользователя не доходил — а это единственное место,
+    # где он написан, если браузер не открылся.
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
     log.info("Веб-интерфейс слушает %s", url)
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()

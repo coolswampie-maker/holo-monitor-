@@ -32,11 +32,27 @@ MCF = ROOT / "recovery" / "extracted_1"
 TESTS = []
 
 
+class Skip(Exception):
+    """Проверку выполнить нечем: нет данных, на которых она держится.
+
+    Пройденной такая проверка не считается. Раньше подобные случаи
+    возвращали строку «проверка пропущена» и попадали в число PASS,
+    из-за чего приёмочный итог был завышен.
+    """
+
+
 def test(name):
     def deco(fn):
         TESTS.append((name, fn))
         return fn
     return deco
+
+
+def need_demo():
+    """Каталог настоящих кадров M4 или SKIP, если его нет."""
+    if not DEMO.exists():
+        raise Skip(f"нет демонстрационного эксперимента: {DEMO}")
+    return DEMO
 
 
 def _cal():
@@ -46,6 +62,8 @@ def _cal():
 
 def _run(path, cal=None, limit=3):
     from holocyt.experiment import Experiment
+    if not Path(path).exists():
+        raise Skip(f"нет данных для прогона: {path}")
     ex = Experiment.from_hstudio(path, cal=cal)
     ex.records = ex.records[:limit]
     return ex.run()
@@ -55,7 +73,7 @@ def _run(path, cal=None, limit=3):
 @test("Распознавание каталога Hstudio")
 def _detect():
     from holocyt.importers.hstudio import detect
-    got = detect(DEMO)
+    got = detect(need_demo())
     if got != "experiment":
         raise AssertionError(f"ожидалось 'experiment', получено {got!r}")
     if detect(ROOT / "holocyt") is not None:
@@ -66,7 +84,7 @@ def _detect():
 @test("Чтение настоящей карты фазы .fmx")
 def _read():
     from holocyt.importers.hstudio import load_experiment, read_phase_matrix
-    ex = load_experiment(DEMO)
+    ex = load_experiment(need_demo())
     pm = read_phase_matrix(ex.phase_files[0])
     if (pm.width, pm.height) != (1024, 1024):
         raise AssertionError(f"неожиданный размер {pm.width}x{pm.height}")
@@ -80,7 +98,7 @@ def _read():
 def _bin_refused():
     from holocyt.importers.hstudio import load_experiment, UnsupportedFormat
     if not MCF.exists():
-        return "набор MCF-10A недоступен, проверка пропущена"
+        raise Skip(f"нет набора MCF-10A с файлами .bin: {MCF}")
     try:
         load_experiment(MCF)
     except UnsupportedFormat:
@@ -93,7 +111,7 @@ def _cal_import():
     from holocyt.importers.hstudio import read_transfer_info
     from holocyt.calibration import from_transfer_xml, MEASURED, CALCULATED
     if not (MCF / "DBTransferInfo.xml").exists():
-        return "файл паспорта недоступен, проверка пропущена"
+        raise Skip(f"нет файла паспорта: {MCF / 'DBTransferInfo.xml'}")
     _, optics = read_transfer_info(MCF)
     cal = from_transfer_xml(optics, str(MCF / "DBTransferInfo.xml"))
     if not cal.complete:
@@ -145,7 +163,7 @@ def _with_cal():
 def _damaged():
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "опыт"
-        shutil.copytree(DEMO, work)
+        shutil.copytree(need_demo(), work)
         files = sorted((work / "Storage" / "PhaseMatrixStorage").rglob("*.fmx"))
         files[1].write_bytes(b"\x00" * 4096)          # ломаем один кадр
         ex = _run(work, cal=_cal(), limit=4)
@@ -172,11 +190,51 @@ def _empty_dir():
     raise AssertionError("ошибка не возникла")
 
 
+@test("Посторонний каталог с .bin не принимается за эксперимент")
+def _stray_bin():
+    """Регрессия: .bin сам по себе не признак выгрузки Hstudio.
+
+    Файлы .bin лежат в множестве системных каталогов, и C:\\Windows\\System32
+    опознавался как эксперимент: detect() возвращал 'unsupported', а запрос
+    к интерфейсу заканчивался HTTP 500 без пояснения. Поддержку .bin эта
+    проверка не подразумевает — формат по-прежнему отклоняется.
+    """
+    from holocyt.importers.hstudio import detect
+    from holocyt.webui import inspect
+    with tempfile.TemporaryDirectory() as tmp:
+        stray = Path(tmp) / "посторонний каталог"
+        (stray / "вложенный").mkdir(parents=True)
+        (stray / "вложенный" / "данные.bin").write_bytes(b"\x00" * 64)
+
+        if detect(stray) is not None:
+            raise AssertionError(
+                f"каталог без признаков Hstudio принят за эксперимент: "
+                f"{detect(stray)!r}")
+        r = inspect(str(stray))
+        if r.get("ok") is not False:
+            raise AssertionError("посторонний каталог принят как годный")
+        if "не распознан" not in r.get("error", ""):
+            raise AssertionError(f"невнятное сообщение: {r.get('error')}")
+
+        # А вот выгрузка Hstudio с картами .bin должна отклоняться
+        # именно с пояснением про формат, и тоже без исключения наружу.
+        real = Path(tmp) / "выгрузка Hstudio"
+        (real / "Storage" / "PhaseMatrixStorage").mkdir(parents=True)
+        (real / "DBTransferInfo.xml").write_text("<x/>", encoding="utf-8")
+        (real / "Storage" / "PhaseMatrixStorage" / "0.bin").write_bytes(b"\x00" * 64)
+        r2 = inspect(str(real))
+        if r2.get("ok") is not False:
+            raise AssertionError("каталог с .bin принят как годный")
+        if ".fmx" not in r2.get("error", ""):
+            raise AssertionError(f"нет пояснения про формат: {r2.get('error')}")
+    return "посторонний каталог отклонён, выгрузка с .bin — с пояснением"
+
+
 @test("Повреждённый imagedb.xml не мешает анализу")
 def _bad_xml():
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "опыт"
-        shutil.copytree(DEMO, work)
+        shutil.copytree(need_demo(), work)
         (work / "imagedb.xml").write_text("<не xml вовсе", encoding="utf-8")
         ex = _run(work, cal=_cal(), limit=2)
         if not ex.fields:
@@ -190,7 +248,7 @@ def _cyrillic():
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "Исследования" / "Клеточные культуры" / "Опыт 01"
         work.parent.mkdir(parents=True)
-        shutil.copytree(DEMO, work)
+        shutil.copytree(need_demo(), work)
         ex = _run(work, cal=_cal(), limit=2)
         if not ex.fields:
             raise AssertionError("анализ не выполнился")
@@ -206,7 +264,7 @@ def _spaces():
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "My Data 1.0" / "Эксперимент M4 (копия)"
         work.parent.mkdir(parents=True)
-        shutil.copytree(DEMO, work)
+        shutil.copytree(need_demo(), work)
         ex = _run(work, cal=None, limit=2)
         if not ex.fields:
             raise AssertionError("анализ не выполнился")
@@ -298,26 +356,46 @@ def main():
     print(f"\n  {PRODUCT} {VERSION} — регрессионный набор")
     print(f"  данные: {DEMO}\n")
     width = max(len(n) for n, _ in TESTS) + 2
-    failed, t0 = [], time.time()
+    failed, skipped, t0 = [], [], time.time()
     for name, fn in TESTS:
         print(f"  {name:.<{width}}", end=" ", flush=True)
         try:
             detail = fn()
-            print("PASS")
-            if detail:
-                print(f"       {detail}")
+        except Skip as e:
+            print("SKIP")
+            print(f"       {e}")
+            skipped.append(name)
+            continue
         except Exception as e:
             print("FAIL")
             print(f"       {type(e).__name__}: {e}")
             for line in traceback.format_exc().splitlines()[-3:-1]:
                 print(f"       {line.strip()}")
             failed.append(name)
-    print(f"\n  {len(TESTS) - len(failed)} / {len(TESTS)} PASS  "
-          f"за {time.time() - t0:.0f} с")
+            continue
+        print("PASS")
+        if detail:
+            print(f"       {detail}")
+
+    # Пропущенная проверка не засчитывается пройденной: приёмочный итог
+    # должен показывать, сколько проверок действительно выполнялось.
+    total = len(TESTS)
+    executed = total - len(skipped)
+    n_pass = executed - len(failed)
+    print(f"\n  {total} проверок")
+    print(f"  {executed} выполнено")
+    print(f"  {n_pass} PASS")
+    print(f"  {len(failed)} FAIL")
+    print(f"  {len(skipped)} SKIP")
+    print(f"  за {time.time() - t0:.0f} с")
     if failed:
-        print(f"  Отказы: {', '.join(failed)}\n")
+        print(f"\n  Отказы: {', '.join(failed)}\n")
         return 1
-    print("  Все проверки пройдены.\n")
+    if skipped:
+        print(f"\n  Не выполнялись: {', '.join(skipped)}")
+        print("  Приёмка неполная: часть проверок пропущена.\n")
+        return 0
+    print("\n  Все проверки пройдены.\n")
     return 0
 
 
