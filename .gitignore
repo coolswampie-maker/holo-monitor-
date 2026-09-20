@@ -6,11 +6,9 @@ __pycache__/
 build_cache/
 dist/
 release/
-out/*.pdf
-out/*.csv
-out/*.png
-out/*.txt
-out/*.log
+# Результаты работы программы — целиком, а не по расширениям:
+# иначе новый тип файла молча попадёт в репозиторий.
+out/
 logs/
 recovery/hstudio_raw.cdr
 recovery/*.zip
