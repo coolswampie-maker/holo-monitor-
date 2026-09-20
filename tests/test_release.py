@@ -175,6 +175,45 @@ def _damaged():
                 f"{len(ex.skipped)}: {Path(ex.skipped[0][0]).name}")
 
 
+@test("Повреждённый кадр не ломает показ хода работы")
+def _damaged_with_progress():
+    """Регрессия: интерфейс падал на повреждённом кадре.
+
+    Experiment.run() передаёт в обратный вызов fr=None для пропущенного
+    кадра. Интерфейс обращался к fr.n_cells без проверки, и весь анализ
+    прерывался с AttributeError, хотя остальные кадры уже были посчитаны.
+    Прежняя проверка «Повреждённый кадр пропускается» этого не ловила,
+    потому что вызывала run() вообще без обратного вызова.
+    """
+    from holocyt.experiment import Experiment
+    seen = []
+
+    def prog(i, n, name, fr):
+        seen.append((i, n, Path(name).name, fr is None))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp) / "опыт"
+        shutil.copytree(need_demo(), work)
+        files = sorted((work / "Storage" / "PhaseMatrixStorage").rglob("*.fmx"))
+        files[1].write_bytes(b"\x00" * 4096)
+        ex = Experiment.from_hstudio(work, cal=_cal())
+        ex.records = ex.records[:4]
+        ex.run(progress=prog)                 # именно так вызывает интерфейс
+
+        if not ex.skipped:
+            raise AssertionError("повреждённый файл не был пропущен")
+        if len(ex.fields) != 3:
+            raise AssertionError(f"обработано {len(ex.fields)} кадров вместо 3")
+        if len(seen) != 4:
+            raise AssertionError(
+                f"обратный вызов сработал {len(seen)} раз вместо 4: "
+                f"на повреждённом кадре анализ прервался")
+        if not any(is_none for *_, is_none in seen):
+            raise AssertionError("пропущенный кадр не дошёл до обратного вызова")
+        return (f"обработано {len(ex.fields)} из 4, обратный вызов получил "
+                f"все {len(seen)} кадров, включая пропущенный")
+
+
 @test("Каталог без данных: понятное сообщение, не traceback")
 def _empty_dir():
     from holocyt.importers.hstudio import detect, load_experiment

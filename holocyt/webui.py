@@ -110,10 +110,15 @@ def _run(path, cal, min_area_px, method):
             STATE["total"] = len(ex.records)
 
         def prog(i, n, name, fr):
+            # fr равен None, когда кадр не прочитался: Experiment.run()
+            # такие пропускает и сообщает о них отдельно. Обращаться к
+            # fr.n_cells без проверки нельзя — иначе один повреждённый
+            # файл ронял весь анализ, хотя остальные кадры уже посчитаны.
+            tail = (f"объектов {fr.n_cells}" if fr is not None
+                    else "пропущен, файл не прочитан")
             with LOCK:
                 STATE.update(progress=i, total=n,
-                             message=f"Кадр {i} из {n}: {Path(name).name} — "
-                                     f"объектов {fr.n_cells}")
+                             message=f"Кадр {i} из {n}: {Path(name).name} — {tail}")
 
         ex.run(method=method, progress=prog, min_area_px=min_area_px)
 
