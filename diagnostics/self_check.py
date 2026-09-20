@@ -205,17 +205,101 @@ def _offline():
 
 @check("Запуск собранного приложения", windows_only=True)
 def _frozen():
-    raise NotImplementedError
+    """Поднимает собранное приложение целиком и ждёт ответа интерфейса.
+
+    Проверять `--version` бессмысленно: argparse печатает версию и выходит
+    до импорта numpy, поэтому неработоспособная сборка её проходит.
+    """
+    import json
+    import socket
+    import subprocess
+    import time
+    import urllib.request
+
+    if getattr(sys, "frozen", False):
+        return "самодиагностика выполняется из собранного приложения"
+
+    dist = Path(__file__).resolve().parents[1] / "dist" / "ГОЛОЦИТ"
+    exe = dist / "ГОЛОЦИТ.exe"
+    if not exe.exists():
+        exe = dist / "HOLOCYT.exe"
+    if not exe.exists():
+        raise AssertionError(
+            f"сборка не найдена: {dist}. Сначала выполните build\\BUILD_WINDOWS.bat")
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    proc = subprocess.Popen(
+        [str(exe), "--no-browser", "--port", str(port)],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    try:
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                tail = (proc.stdout.read() if proc.stdout else "")[-1500:]
+                raise AssertionError(
+                    f"приложение завершилось с кодом {proc.returncode}: {tail}")
+            try:
+                with urllib.request.urlopen(
+                        f"http://127.0.0.1:{port}/api/config", timeout=2) as r:
+                    cfg = json.load(r)
+            except Exception:
+                time.sleep(1)
+                continue
+            return (f"{exe.name} запустился, интерфейс отвечает на порту "
+                    f"{port}, версия {cfg.get('version')}")
+        raise AssertionError("интерфейс собранного приложения не ответил за 120 с")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=15)
+        except Exception:
+            proc.kill()
 
 
 @check("Загрузка библиотек DLL", windows_only=True)
 def _dll():
-    raise NotImplementedError
+    """Загружает C-расширения научных библиотек.
+
+    Именно здесь всплывает отсутствие компонентов Visual C++ и неполная
+    упаковка: каждое из этих расширений тянет свои DLL.
+    """
+    import importlib
+
+    mods = ("numpy._core._multiarray_umath", "numpy.linalg._umath_linalg",
+            "scipy.linalg._fblas", "scipy.special._ufuncs",
+            "sklearn.tree._tree", "sklearn.utils._openmp_helpers",
+            "PIL._imaging", "matplotlib.ft2font")
+    failed = []
+    for m in mods:
+        try:
+            importlib.import_module(m)
+        except Exception as e:
+            failed.append(f"{m} ({type(e).__name__}: {e})")
+    if failed:
+        raise AssertionError("не загрузились: " + "; ".join(failed))
+    return f"{len(mods)} C-расширений загружено, библиотеки DLL на месте"
 
 
 @check("Открытие браузера в Windows", windows_only=True)
 def _browser():
-    raise NotImplementedError
+    """Проверяет, что в системе зарегистрирован браузер.
+
+    Сам браузер не открывается: проверяется только то, что Windows
+    сообщает программе, чем открывать ссылку.
+    """
+    import webbrowser
+
+    try:
+        ctrl = webbrowser.get()
+    except webbrowser.Error as e:
+        raise AssertionError(
+            f"браузер по умолчанию не определён: {e}. "
+            f"Программа работает, адрес интерфейса печатается в консоли")
+    return f"браузер по умолчанию: {getattr(ctrl, 'name', None) or type(ctrl).__name__}"
 
 
 def main():

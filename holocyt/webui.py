@@ -32,8 +32,15 @@ from .synth import CLASS_RU, CLASS_COLOR, DISPLAY_CLASSES
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = Path(__file__).resolve().parent / "web"
-OUT = ROOT / "out"
 DEMO = ROOT / "demo_data" / "M4_demo_8"
+
+# Читаемые ресурсы (интерфейс, демо) лежат внутри сборки, рядом с модулем,
+# поэтому для них годится ROOT. Результаты работы — нет: в упакованном виде
+# ROOT указывает на служебный каталог _internal, и выгрузка уходила бы туда,
+# а пользователь смотрел бы в пустую папку out рядом с программой.
+from .diagnostics.logs import app_root as _app_root   # noqa: E402
+
+OUT = _app_root() / "out"
 
 STATE = {"running": False, "done": False, "error": None, "progress": 0,
          "total": 0, "message": "Готов к работе", "experiment": None,

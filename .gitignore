@@ -20,3 +20,7 @@ vendor/**/*.pdf
 demo_data/
 recovery/
 vendor/
+
+# Побочные каталоги сборки и запуска на Windows.
+.venv-run/
+build/build/
