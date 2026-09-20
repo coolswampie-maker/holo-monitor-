@@ -12,6 +12,7 @@ import io
 import json
 import math
 import mimetypes
+import sys
 import threading
 import traceback
 import urllib.parse
@@ -337,7 +338,14 @@ def find_free_port(preferred=8765, host="127.0.0.1", tries=40):
     import socket
     for port in [preferred] + list(range(preferred + 1, preferred + tries)):
         with socket.socket() as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # SO_REUSEADDR здесь ставить нельзя. На Windows эта опция
+            # разрешает двум сокетам занять один и тот же адрес, поэтому
+            # привязка к уже слушаемому порту удаётся, и порт всегда
+            # объявляется свободным: второй экземпляр программы молча
+            # вставал на порт первого и не отвечал. На Windows нужна
+            # исключительная привязка, на прочих системах — обычная.
+            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             try:
                 s.bind((host, port))
                 return port
@@ -348,11 +356,22 @@ def find_free_port(preferred=8765, host="127.0.0.1", tries=40):
         return s.getsockname()[1]
 
 
+class _Server(ThreadingHTTPServer):
+    """HTTP-сервер программы.
+
+    allow_reuse_address на Windows означает SO_REUSEADDR, то есть
+    разрешение встать на чужой занятый порт. Оставлять его нельзя по той
+    же причине, что и в find_free_port.
+    """
+
+    allow_reuse_address = not sys.platform.startswith("win")
+
+
 def serve(host="127.0.0.1", port=None, open_browser=True):
     from .diagnostics import setup_logging, log_path
     log = setup_logging()
     port = find_free_port(port or 8765, host)
-    srv = ThreadingHTTPServer((host, port), Handler)
+    srv = _Server((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"\n  {__product__} {__version__}")
     print(f"  Интерфейс: {url}")
