@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ГОЛОЦИТ</title>
+<style>
+:root{--bg:#F4F6F9;--card:#fff;--ink:#1B2430;--muted:#6B7683;--line:#E3E8EF;
+ --accent:#2F6FD0;--soft:#EAF1FB;--ok:#2E9E5B;--warn:#E0A32E;--bad:#D1495B;
+ --A:#2E9E5B;--B:#2F6FD0;--C:#8A6FC4;
+ --r:12px;--sh:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+header{background:linear-gradient(135deg,#1E3A5F,#2F6FD0);color:#fff;padding:20px 32px}
+header h1{margin:0;font-size:22px;font-weight:650;letter-spacing:.5px}
+header p{margin:3px 0 0;opacity:.85;font-size:13px}
+header .v{float:right;opacity:.7;font-size:12px;margin-top:6px}
+main{max-width:1150px;margin:0 auto;padding:22px 20px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+ box-shadow:var(--sh);padding:20px 22px;margin-bottom:16px}
+.card h2{margin:0 0 14px;font-size:15.5px;font-weight:650;display:flex;
+ align-items:center;gap:9px}
+.step{display:inline-flex;align-items:center;justify-content:center;width:23px;
+ height:23px;border-radius:50%;background:var(--accent);color:#fff;font-size:12.5px;
+ font-weight:700;flex:none}
+label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px}
+input,select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+ font:inherit;font-size:14px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--soft)}
+button{padding:10px 20px;border:0;border-radius:8px;background:var(--accent);color:#fff;
+ font:inherit;font-weight:600;cursor:pointer;transition:.15s}
+button:hover:not(:disabled){background:#2559A8}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+button.ghost:hover:not(:disabled){background:var(--soft)}
+.row{display:grid;gap:12px;margin-bottom:12px}
+.row.c2{grid-template-columns:1fr auto}
+.row.c4{grid-template-columns:repeat(4,1fr)}
+.bar{height:7px;background:var(--line);border-radius:99px;overflow:hidden;margin:12px 0 8px}
+.bar>div{height:100%;background:var(--accent);width:0;transition:width .3s}
+.status{font-size:13px;color:var(--muted)}
+.status.err{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#F5F7FA;color:var(--muted);padding:8px;font-weight:600;font-size:11.5px;
+ text-align:left;text-transform:uppercase;letter-spacing:.3px}
+td{padding:7px 8px;border-bottom:1px solid var(--line)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10.5px;
+ font-weight:700;color:#fff;letter-spacing:.3px}
+.tag.A{background:var(--A)} .tag.B{background:var(--B)} .tag.C{background:var(--C)}
+.note{background:#FFF8E8;border:1px solid #F0DCA8;color:#7A5B12;border-radius:8px;
+ padding:11px 14px;font-size:13px;margin-top:12px}
+.note.ok{background:#EDF9F1;border-color:#B6E2C6;color:#226B3F}
+.note.bad{background:#FDEDEF;border-color:#F3C2C8;color:#8E2B37}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+ padding:14px 16px;box-shadow:var(--sh)}
+.kpi .v{font-size:24px;font-weight:680;line-height:1.2}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:11px}
+.thumb{border:1px solid var(--line);border-radius:9px;overflow:hidden;cursor:pointer;
+ background:#0b0b0b;transition:.15s}
+.thumb:hover{border-color:var(--accent);transform:translateY(-2px)}
+.thumb img{width:100%;display:block}
+.thumb .cap{padding:6px 9px;font-size:11.5px;background:#fff;color:var(--muted)}
+#modal{position:fixed;inset:0;background:rgba(10,15,22,.86);display:none;
+ align-items:center;justify-content:center;z-index:50;padding:24px}
+#modal img{max-width:96vw;max-height:92vh;border-radius:8px}
+.hidden{display:none}
+.muted{color:var(--muted);font-size:12.5px}
+details summary{cursor:pointer;color:var(--accent);font-size:13px;user-select:none}
+svg.chart{width:100%;height:190px;display:block}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:3px;display:block}
+.stack{display:flex;height:16px;border-radius:4px;overflow:hidden}
+.stack i{display:block;height:100%}
+footer{max-width:1150px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <span class="v" id="ver"></span>
+  <h1>ГОЛОЦИТ</h1>
+  <p>Программное обеспечение анализа данных цифровой голографической микроскопии</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2><span class="step">1</span> Выбрать эксперимент Hstudio</h2>
+    <div class="row c2">
+      <input id="path" placeholder="Путь к каталогу эксперимента">
+      <button id="btn_inspect">Открыть</button>
+    </div>
+    <button class="ghost" id="btn_demo">Открыть демонстрационный эксперимент</button>
+    <span class="muted" style="margin-left:10px" id="demo_hint"></span>
+    <div class="status err hidden" id="err1"></div>
+  </div>
+
+  <div class="card hidden" id="card2">
+    <h2><span class="step">2</span> Что найдено</h2>
+    <table><tbody id="found"></tbody></table>
+    <div id="cal_note"></div>
+    <details style="margin-top:14px">
+      <summary>Калибровка прибора и ввод недостающих значений</summary>
+      <table style="margin-top:10px"><thead><tr>
+        <th>Величина</th><th>Значение</th><th>Источник</th></tr></thead>
+        <tbody id="cal_rows"></tbody></table>
+      <div class="row c4" style="margin-top:12px">
+        <div><label>Размер пикселя, мкм</label><input id="c_px" placeholder="не задан"></div>
+        <div><label>Длина волны, мкм</label><input id="c_wl" placeholder="не задана"></div>
+        <div><label>n клеток</label><input id="c_nc" placeholder="не задан"></div>
+        <div><label>n среды</label><input id="c_nm" placeholder="не задан"></div>
+      </div>
+      <div class="muted">Введённые здесь значения помечаются в отчёте как
+        заданные оператором, а не измеренные прибором.</div>
+    </details>
+  </div>
+
+  <div class="card hidden" id="card3">
+    <h2><span class="step">3</span> Запустить анализ</h2>
+    <button id="btn_run">Анализировать</button>
+    <span class="muted" style="margin-left:12px">
+      Минимальная площадь объекта: <input id="min_area" value="500"
+        style="width:80px;display:inline-block;padding:5px 8px"> пикселей</span>
+    <div class="bar"><div id="prog"></div></div>
+    <div class="status" id="status">Готов к работе</div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <h2><span class="step">4</span> Результат</h2>
+      <div id="rel_note"></div>
+      <table><thead><tr><th>Показатель</th><th style="text-align:right">Значение</th>
+        <th style="width:60px">Категория</th></tr></thead>
+        <tbody id="summary"></tbody></table>
+      <div class="legend" style="margin-top:12px">
+        <span><i style="background:var(--A)"></i>A — измерено из карты фазы</span>
+        <span><i style="background:var(--B)"></i>B — требует калибровки прибора</span>
+        <span><i style="background:var(--C)"></i>C — вычислено ГОЛОЦИТом</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Графики</h2>
+      <div class="charts">
+        <div><div class="muted" id="t_count"></div><svg class="chart" id="ch_count"></svg></div>
+        <div><div class="muted" id="t_area"></div><svg class="chart" id="ch_area"></svg></div>
+        <div><div class="muted" id="t_hist"></div><svg class="chart" id="ch_hist"></svg></div>
+        <div><div class="muted" id="t_conf"></div><svg class="chart" id="ch_conf"></svg></div>
+      </div>
+      <div class="muted" style="margin-top:10px">Кадры отложены в порядке файлов.
+        Порядок съёмки во времени в данных не восстанавливается, поэтому ось
+        подписана именно так.</div>
+    </div>
+
+    <div class="card hidden" id="card_comp">
+      <h2>Состав популяции <span class="tag C">C</span></h2>
+      <div class="stack" id="comp_stack"></div>
+      <div class="legend" id="comp_legend"></div>
+    </div>
+
+    <div class="card">
+      <h2>Кадры с разметкой <span class="muted" style="font-weight:400">нажмите для увеличения</span></h2>
+      <div class="gallery" id="gallery"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">5</span> Выгрузка</h2>
+      <button class="ghost" id="dl_csv">Экспорт CSV</button>
+      <button class="ghost" id="dl_pdf" style="margin-left:8px">Сформировать PDF-отчёт</button>
+      <details style="margin-top:14px">
+        <summary>Какие колонки попадут в CSV</summary>
+        <div id="cols" style="margin-top:10px;font-size:12.5px"></div>
+      </details>
+    </div>
+  </div>
+</main>
+
+<footer>Исследовательское программное обеспечение. Не является медицинским изделием.</footer>
+<div id="modal"><img id="modal_img" alt=""></div>
+
+<script>
+const $=id=>document.getElementById(id); let CFG=null, INFO=null, poller=null;
+const fmt=(v,d=1)=>v===null||v===undefined?'—':Number(v).toLocaleString('ru-RU',
+  {minimumFractionDigits:d,maximumFractionDigits:d});
+
+async function init(){
+  CFG=await (await fetch('/api/config')).json();
+  $('ver').textContent=CFG.product+' '+CFG.version;
+  if(CFG.demo_exists){ $('demo_hint').textContent='настоящие данные HoloMonitor M4'; }
+  else { $('btn_demo').disabled=true; $('demo_hint').textContent='демо-данные не установлены'; }
+  const st=await (await fetch('/api/status')).json();
+  if(st.done) loadResults(); else if(st.running) poll();
+}
+
+$('btn_demo').onclick=()=>{ $('path').value=CFG.demo_path; doInspect(); };
+$('btn_inspect').onclick=doInspect;
+
+async function doInspect(){
+  $('err1').classList.add('hidden');
+  const r=await (await fetch('/api/inspect?path='+encodeURIComponent($('path').value.trim()))).json();
+  if(!r.ok){ $('err1').classList.remove('hidden'); $('err1').textContent=r.error;
+             $('card2').classList.add('hidden'); $('card3').classList.add('hidden'); return; }
+  INFO=r;
+  $('found').innerHTML=[
+    ['Название эксперимента', r.name],
+    ['Кадров', r.n_frames],
+    ['Размер изображения', r.width+' × '+r.height+' пикселей'],
+    ['Формат карты фазы', r.format],
+    ['Диапазон сдвига фазы', r.phase_range[0]+' … '+r.phase_range[1]+' длин волны'],
+    ['Найденные источники', r.sources.join(', ')],
+    ['База Hstudio', r.database ? 'есть, не читается без Windows' : 'нет'],
+  ].map(([k,v])=>`<tr><td class="muted">${k}</td><td><b>${v}</b></td></tr>`).join('');
+
+  const cal=r.calibration;
+  $('cal_note').innerHTML='<div class="note '+(cal.complete?'ok':'')+'">'+cal.status+
+    (cal.complete?'':'<br>Программа не будет показывать величины в микрометрах, '+
+     'кубических микрометрах и пикограммах. Счёт объектов, геометрия в пикселях '+
+     'и статистика сдвига фазы считаются как обычно.')+'</div>';
+  $('cal_rows').innerHTML=cal.rows.map(x=>
+    `<tr><td>${x.name}</td><td class="num">${x.value===null?'—':x.value}</td>
+     <td class="muted">${x.status_ru}${x.source?' · '+x.source:''}</td></tr>`).join('');
+  $('card2').classList.remove('hidden'); $('card3').classList.remove('hidden');
+  $('results').classList.add('hidden');
+}
+
+$('btn_run').onclick=async()=>{
+  $('btn_run').disabled=true; $('status').className='status'; $('status').textContent='Запуск…';
+  const cal={}; const map={c_px:'pixel_size_um',c_wl:'wavelength_um',c_nc:'n_cell',c_nm:'n_medium'};
+  for(const k in map){ const v=$(k).value.trim(); if(v) cal[map[k]]=parseFloat(v); }
+  const r=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:$('path').value.trim(),calibration:cal,
+      min_area_px:parseInt($('min_area').value)||500})});
+  if(!r.ok){ const e=await r.json(); $('status').className='status err';
+    $('status').textContent='Ошибка: '+(e.error||r.status); $('btn_run').disabled=false; return; }
+  poll();
+};
+
+function poll(){ clearInterval(poller); poller=setInterval(async()=>{
+  const s=await (await fetch('/api/status')).json();
+  $('status').className='status'+(s.error?' err':''); $('status').textContent=s.error?('Ошибка: '+s.error):s.message;
+  $('prog').style.width=s.total?(100*s.progress/s.total)+'%':'0';
+  if(!s.running){ clearInterval(poller); $('btn_run').disabled=false;
+    if(s.done){ $('prog').style.width='100%'; loadResults(); } }},600); }
+
+function chart(svg,vals,labels,color,fill){
+  const el=$(svg); const W=560,H=190,P=32;
+  const v=vals.filter(x=>x!==null); if(!v.length){el.innerHTML='';return;}
+  const mn=Math.min(...v),mx=Math.max(...v),rg=(mx-mn)||1;
+  const X=i=>P+i*(W-P-8)/Math.max(vals.length-1,1);
+  const Y=y=>H-22-(y-mn)/rg*(H-22-10);
+  let d='',pts=[];
+  vals.forEach((y,i)=>{ if(y===null)return; pts.push([X(i),Y(y)]); });
+  d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area=fill?`<path d="${d} L ${pts[pts.length-1][0]} ${H-22} L ${pts[0][0]} ${H-22} Z"
+    fill="${color}" opacity=".12"/>`:'';
+  el.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  el.innerHTML=`<line x1="${P}" y1="${H-22}" x2="${W-4}" y2="${H-22}" stroke="#E3E8EF"/>
+   <line x1="${P}" y1="10" x2="${P}" y2="${H-22}" stroke="#E3E8EF"/>
+   ${area}<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8"/>
+   <text x="2" y="14" font-size="9" fill="#6B7683">${mx.toFixed(mx>50?0:1)}</text>
+   <text x="2" y="${H-24}" font-size="9" fill="#6B7683">${mn.toFixed(mn>50?0:1)}</text>
+   <text x="${P}" y="${H-8}" font-size="9" fill="#6B7683">кадр 1</text>
+   <text x="${W-46}" y="${H-8}" font-size="9" fill="#6B7683">кадр ${vals.length}</text>`;
+}
+
+function histogram(svg,counts,edges,unit){
+  const el=$(svg); const W=560,H=190,P=32; const mx=Math.max(...counts)||1;
+  const bw=(W-P-8)/counts.length;
+  const bars=counts.map((c,i)=>{const h=(H-32)*c/mx;
+    return `<rect x="${(P+i*bw).toFixed(1)}" y="${(H-22-h).toFixed(1)}"
+      width="${(bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="#2F6FD0" opacity=".75"/>`}).join('');
+  el.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  el.innerHTML=`<line x1="${P}" y1="${H-22}" x2="${W-4}" y2="${H-22}" stroke="#E3E8EF"/>${bars}
+   <text x="2" y="14" font-size="9" fill="#6B7683">${mx}</text>
+   <text x="${P}" y="${H-8}" font-size="9" fill="#6B7683">${edges[0]}</text>
+   <text x="${W-60}" y="${H-8}" font-size="9" fill="#6B7683">${edges[edges.length-1]} ${unit}</text>`;
+}
+
+async function loadResults(){
+  const d=await (await fetch('/api/results')).json(); if(!d.ok) return;
+  $('results').classList.remove('hidden');
+  const s=d.summary;
+  $('kpis').innerHTML=s.slice(0,4).map(x=>
+    `<div class="kpi"><div class="v">${typeof x.value==='number'?fmt(x.value,
+      Number.isInteger(x.value)?0:1):'—'}</div><div class="l">${x.label}</div></div>`).join('');
+  $('summary').innerHTML=s.map(x=>
+    `<tr><td>${x.label}</td><td class="num">${typeof x.value==='number'?fmt(x.value,
+      Number.isInteger(x.value)?0:2):'—'}</td>
+     <td><span class="tag ${x.cat}">${x.cat}</span></td></tr>`).join('');
+
+  if(!d.calibrated){
+    $('rel_note').innerHTML='<div class="note">'+d.calibration_status+
+      '. Показатели категории B (мкм, мкм³, пг) и состояние клеток не вычислялись.</div>';
+  } else if(d.reliability && !d.reliability.reliable){
+    $('rel_note').innerHTML='<div class="note">'+d.reliability.note+'</div>';
+  } else { $('rel_note').innerHTML=''; }
+
+  const se=d.series;
+  $('t_count').textContent='Число объектов по кадрам';
+  chart('ch_count',se.count,se.labels,'#2F6FD0',true);
+  $('t_area').textContent='Медианная площадь объекта по кадрам, '+se.area_unit;
+  chart('ch_area',se.area,se.labels,'#2E9E5B',true);
+  $('t_hist').textContent='Распределение площади объектов, '+d.hist.unit;
+  histogram('ch_hist',d.hist.counts,d.hist.edges,d.hist.unit);
+  $('t_conf').textContent='Доля площади кадра, занятая объектами, %';
+  chart('ch_conf',se.confluence,se.labels,'#8A6FC4',true);
+
+  if(d.composition){
+    $('card_comp').classList.remove('hidden');
+    $('comp_stack').innerHTML=d.composition.filter(c=>c.pct>0).map(c=>
+      `<i style="width:${c.pct}%;background:${c.color}" title="${c.name}: ${c.pct} %"></i>`).join('');
+    $('comp_legend').innerHTML=d.composition.map(c=>
+      `<span><i style="background:${c.color}"></i>${c.name} ${c.pct} %</span>`).join('');
+  } else { $('card_comp').classList.add('hidden'); }
+
+  $('gallery').innerHTML=d.fields.map(f=>
+    `<div class="thumb" data-i="${f.i}"><img loading="lazy" src="/api/field.png?i=${f.i}">
+     <div class="cap">${f.name} · объектов ${f.cells}</div></div>`).join('');
+  document.querySelectorAll('.thumb').forEach(t=>t.onclick=()=>{
+    $('modal_img').src='/api/field.png?i='+t.dataset.i; $('modal').style.display='flex';});
+
+  $('cols').innerHTML=['A','B','C'].map(k=>d.columns[k].length?
+    `<div style="margin-bottom:8px"><span class="tag ${k}">${k}</span>
+     <span class="muted"> ${d.columns[k].join(' · ')}</span></div>`:'').join('');
+  $('dl_pdf').disabled=!d.report; $('dl_csv').disabled=!d.csv;
+}
+
+$('modal').onclick=()=>$('modal').style.display='none';
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('modal').style.display='none'});
+$('dl_pdf').onclick=()=>location.href='/api/report.pdf';
+$('dl_csv').onclick=()=>location.href='/api/cells.csv';
+init();
+</script>
+</body></html>
