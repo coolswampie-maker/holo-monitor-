@@ -109,7 +109,7 @@ def _hstudio():
     from .features import measure_cells
     from .calibration import Calibration, from_user
     import numpy as np
-    demo = ROOT / "demo_data" / "M4 Example woundhealing"
+    demo = ROOT / "demo_data" / "M4_demo_8"
     if not demo.exists():
         return "демонстрационный эксперимент не установлен, проверка пропущена"
     if detect(demo) is None:

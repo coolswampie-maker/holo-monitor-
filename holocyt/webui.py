@@ -33,7 +33,7 @@ from .synth import CLASS_RU, CLASS_COLOR, DISPLAY_CLASSES
 ROOT = Path(__file__).resolve().parent.parent
 WEB = Path(__file__).resolve().parent / "web"
 OUT = ROOT / "out"
-DEMO = ROOT / "demo_data" / "M4 Example woundhealing"
+DEMO = ROOT / "demo_data" / "M4_demo_8"
 
 STATE = {"running": False, "done": False, "error": None, "progress": 0,
          "total": 0, "message": "Готов к работе", "experiment": None,
@@ -106,18 +106,15 @@ def _run(path, cal, min_area_px, method):
             STATE["message"] = "Формирование отчёта…"
         OUT.mkdir(exist_ok=True)
         pdf = build_report(ex, OUT / f"{ex.name}_отчёт.pdf")
-        rows = ex.cells_table()
-        csv_path = OUT / f"{ex.name}_клетки.csv"
-        if rows:
-            keys = list(rows[0].keys())
-            with open(csv_path, "w", newline="", encoding="utf-8-sig") as fh:
-                w = csvmod.DictWriter(fh, fieldnames=keys, delimiter=";")
-                w.writeheader(); w.writerows(rows)
+        from .export import export_all
+        res = export_all(ex, OUT)
+        msg = (f"Готово: {len(ex.fields)} кадров, "
+               f"{sum(f.n_cells for f in ex.fields)} объектов")
+        if ex.skipped:
+            msg += f". Пропущено файлов: {len(ex.skipped)}"
         with LOCK:
             STATE.update(running=False, done=True, experiment=ex,
-                         report=str(pdf), csv=str(csv_path) if rows else None,
-                         message=f"Готово: {len(ex.fields)} кадров, "
-                                 f"{sum(f.n_cells for f in ex.fields)} объектов")
+                         report=str(pdf), csv=str(res["csv"]), message=msg)
     except Exception as e:
         with LOCK:
             STATE.update(running=False, done=False,
@@ -324,17 +321,43 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(202, {"started": True})
 
 
-def serve(host="127.0.0.1", port=8765, open_browser=True):
+def find_free_port(preferred=8765, host="127.0.0.1", tries=40):
+    """Свободный порт. Сначала привычный, потом любой соседний.
+
+    Жёстко занятый порт — частая причина «программа не запускается»,
+    особенно если открыть второй экземпляр.
+    """
+    import socket
+    for port in [preferred] + list(range(preferred + 1, preferred + tries)):
+        with socket.socket() as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host, port))
+                return port
+            except OSError:
+                continue
+    with socket.socket() as s:          # пусть система выберет сама
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def serve(host="127.0.0.1", port=None, open_browser=True):
+    from .diagnostics import setup_logging, log_path
+    log = setup_logging()
+    port = find_free_port(port or 8765, host)
     srv = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"\n  {__product__} {__version__}")
     print(f"  Интерфейс: {url}")
-    print(f"  Остановить: Ctrl+C\n")
+    print(f"  Журнал:    {log_path()}")
+    print(f"  Остановить: закройте это окно или нажмите Ctrl+C\n")
+    log.info("Веб-интерфейс слушает %s", url)
     if open_browser:
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n  Остановлено.")
+        log.info("Остановлено пользователем")
     finally:
         srv.server_close()

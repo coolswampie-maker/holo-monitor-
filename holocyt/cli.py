@@ -124,14 +124,19 @@ def cmd_analyze(a):
     print("  C — вычислено ГОЛОЦИТом (в таблице клеток)")
 
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    table = ex.cells_table()
-    if table:
-        keys = list(table[0].keys())
-        csv_path = out / f"{ex.name}_клетки.csv"
-        with open(csv_path, "w", newline="", encoding="utf-8-sig") as fh:
-            wr = csv.DictWriter(fh, fieldnames=keys, delimiter=";")
-            wr.writeheader(); wr.writerows(table)
-        print(f"\n  Таблица объектов: {csv_path}  ({len(table)} строк, {len(keys)} колонок)")
+    if ex.skipped:
+        mark = "⚠" if can_print_unicode() else "!"
+        print(f"\n  {mark} Обработано {len(ex.fields)} из {len(ex.records)} кадров, "
+              f"пропущено {len(ex.skipped)}:")
+        for f, why in ex.skipped[:5]:
+            print(f"      {f} — {why}")
+
+    from .export import export_all
+    res = export_all(ex, out)
+    print(f"\n  Таблица объектов: {res['csv']}")
+    print(f"                    {res['rows']} строк, {res['cols']} колонок")
+    if res["metadata"]:
+        print(f"  Метаданные:       {res['metadata']}")
     if not a.no_report:
         from .report import build_report
         pdf = build_report(ex, out / f"{ex.name}_отчёт.pdf")

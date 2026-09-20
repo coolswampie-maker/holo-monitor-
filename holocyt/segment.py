@@ -167,16 +167,61 @@ def _split_touching(binary, phase, min_distance_px=9, seed_phase_weight=0.80,
 DEFAULT_MIN_AREA_PX = 500
 DEFAULT_TYPICAL_AREA_PX = 2600
 
-# Минимальный средний сдвиг фазы, при котором объект считается клеткой.
-# В долях длины волны. При 633 нм это 25 нм разности хода — уровень шума
-# восстановления голограммы.
+# Отсечение слабого сигнала.
 #
-# Порог введён после осмотра реальных кадров: в области царапины
-# сегментатор выделял пустой фон как объекты. Распределение там
-# двугорбое — мусор около 0,025, настоящие клетки от 0,086. Отсечение
-# по 0,04 убирает 73 ложных объекта из 178 в редком кадре и лишь один
-# из 278 в плотном.
-DEFAULT_MIN_PHASE_AVG = 0.04
+# Задача: не принимать фон за клетки. Постоянный порог 0,04 длины волны
+# хорошо сработал на эксперименте woundhealing, но привязывать продукт
+# к числу, подобранному по одному набору, нельзя. Поэтому основной режим —
+# адаптивный: порог выводится из уровня шума КОНКРЕТНОГО кадра.
+#
+# Шум оценивается по фоновым пикселям робастно, через медианное
+# абсолютное отклонение: обычное СКО завышается из-за самих клеток.
+# Порог = noise_multiple * sigma, но не ниже fixed_threshold — нижняя
+# граница защищает от кадров с аномально тихим фоном.
+FALLBACK_MIN_PHASE = 0.04
+DEFAULT_NOISE_MULTIPLE = 4.0
+MAD_TO_SIGMA = 1.4826
+
+
+def estimate_background_noise(phase, bg_percentile=40.0):
+    """Робастная оценка шума фона кадра, доли длины волны."""
+    flat = np.asarray(phase, dtype=np.float64).ravel()
+    bg = flat[flat <= np.percentile(flat, bg_percentile)]
+    if bg.size < 256:
+        bg = flat
+    med = np.median(bg)
+    mad = np.median(np.abs(bg - med))
+    return float(MAD_TO_SIGMA * mad)
+
+
+def signal_threshold(phase, mode="adaptive", fixed=FALLBACK_MIN_PHASE,
+                     noise_multiple=DEFAULT_NOISE_MULTIPLE):
+    """Порог, ниже которого объект считается фоном.
+
+    Возвращает (порог, пояснение) — пояснение попадает в журнал, чтобы
+    было видно, откуда взялось число.
+    """
+    if mode == "off":
+        return 0.0, "отсечение слабого сигнала отключено"
+    if mode == "fixed":
+        return float(fixed), f"постоянный порог {fixed:g}"
+    sigma = estimate_background_noise(phase)
+    thr = noise_multiple * sigma
+    if thr < fixed:
+        return float(fixed), (f"шум кадра {sigma:.4f}, {noise_multiple:g}·шум = "
+                              f"{thr:.4f} ниже нижней границы, взято {fixed:g}")
+    return float(thr), (f"шум кадра {sigma:.4f}, порог {noise_multiple:g}·шум = {thr:.4f}")
+
+
+def _resolve_threshold(phase, explicit, mode):
+    """Итоговый порог: явно заданный побеждает настройки."""
+    if explicit is not None:
+        return float(explicit), f"порог задан вызовом: {explicit:g}"
+    from .config import get
+    return signal_threshold(
+        phase, mode=mode or get("background", "mode", "adaptive"),
+        fixed=get("background", "fixed_threshold", FALLBACK_MIN_PHASE),
+        noise_multiple=get("background", "noise_multiple", DEFAULT_NOISE_MULTIPLE))
 
 
 def _drop_low_signal(labels, phase, min_phase_avg):
@@ -209,7 +254,7 @@ def segment_threshold(phase, cfg: OpticalConfig = None, method="otsu",
                       min_area_px=DEFAULT_MIN_AREA_PX, drop_edge_cells=True,
                       split=True, pre_smooth=True,
                       typical_area_px=DEFAULT_TYPICAL_AREA_PX,
-                      min_phase_avg=DEFAULT_MIN_PHASE_AVG):
+                      min_phase_avg=None, background_mode=None):
     """Пороговая сегментация — воспроизводит логику штатного ПО.
 
     method: 'otsu' | 'otsu_blocks' | 'minimum_error' | 'adaptive_gaussian'
@@ -233,7 +278,8 @@ def segment_threshold(phase, cfg: OpticalConfig = None, method="otsu",
     binary = ndi.binary_fill_holes(morphology.opening(binary, morphology.disk(2)))
     labels = (_split_touching(binary, flat, typical_area_px=typical_area_px)
               if split else measure.label(binary))
-    labels = _drop_low_signal(labels, flat, min_phase_avg)
+    thr, _ = _resolve_threshold(flat, min_phase_avg, background_mode)
+    labels = _drop_low_signal(labels, flat, thr)
     return _postprocess(labels, min_area_px, drop_edge_cells), flat
 
 
@@ -241,7 +287,7 @@ def segment_ml(phase, model, cfg: OpticalConfig = None, prob_threshold=0.55,
                min_area_px=DEFAULT_MIN_AREA_PX, drop_edge_cells=True,
                min_distance_px=9, return_prob=False,
                typical_area_px=DEFAULT_TYPICAL_AREA_PX,
-               min_phase_avg=DEFAULT_MIN_PHASE_AVG):
+               min_phase_avg=None, background_mode=None):
     """Сегментация обученным попиксельным классификатором.
 
     Все размеры — в пикселях: калибровка прибора здесь не нужна и не
@@ -258,7 +304,8 @@ def segment_ml(phase, model, cfg: OpticalConfig = None, prob_threshold=0.55,
 
     labels = _split_touching(binary, flat, min_distance_px=min_distance_px,
                              typical_area_px=typical_area_px)
-    labels = _drop_low_signal(labels, flat, min_phase_avg)
+    thr, _ = _resolve_threshold(flat, min_phase_avg, background_mode)
+    labels = _drop_low_signal(labels, flat, thr)
     labels = _postprocess(labels, min_area_px, drop_edge_cells)
     if return_prob:
         return labels, flat, prob

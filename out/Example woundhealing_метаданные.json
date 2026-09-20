@@ -1,0 +1,153 @@
+{
+  "software": {
+    "product": "ГОЛОЦИТ",
+    "version": "1.0.0-rc1",
+    "build_date": "2026-09-20"
+  },
+  "analysis": {
+    "datetime": "2026-09-20T12:41:22",
+    "experiment": "Example woundhealing",
+    "source_directory": "demo_data/M4 Example woundhealing",
+    "frames_total": 3,
+    "frames_processed": 3,
+    "frames_skipped": [],
+    "objects_found": 574,
+    "random_seed": 20260920
+  },
+  "settings": {
+    "segmentation": {
+      "min_area_px": 500,
+      "typical_area_px": 2600,
+      "probability_threshold": 0.55
+    },
+    "background": {
+      "mode": "fixed",
+      "fixed_threshold": 0.04
+    }
+  },
+  "calibration": {
+    "complete": true,
+    "status": "Калибровка задана пользователем",
+    "values": [
+      {
+        "key": "pixel_size_um",
+        "name": "Размер пикселя в плоскости объекта, мкм",
+        "value": 0.3359375,
+        "status": "imported",
+        "source": "указано при запуске"
+      },
+      {
+        "key": "wavelength_um",
+        "name": "Длина волны лазера, мкм",
+        "value": 0.633,
+        "status": "imported",
+        "source": "указано при запуске"
+      },
+      {
+        "key": "n_cell",
+        "name": "Показатель преломления клеток",
+        "value": 1.38,
+        "status": "imported",
+        "source": "указано при запуске"
+      },
+      {
+        "key": "n_medium",
+        "name": "Показатель преломления среды",
+        "value": 1.34,
+        "status": "imported",
+        "source": "указано при запуске"
+      },
+      {
+        "key": "camera_pixel_um",
+        "name": "Размер пикселя камеры, мкм",
+        "value": null,
+        "status": "unavailable",
+        "source": ""
+      },
+      {
+        "key": "lens",
+        "name": "Увеличение объектива",
+        "value": null,
+        "status": "unavailable",
+        "source": ""
+      },
+      {
+        "key": "alpha_um3_pg",
+        "name": "Рефрактометрический инкремент α, мкм³/пг",
+        "value": 0.18,
+        "status": "calculated",
+        "source": "Barer 1952; Zangle & Teitell 2014"
+      }
+    ]
+  },
+  "instrument_metadata": {
+    "experiment_name": "Example woundhealing",
+    "created": "10/11/2017 9:49:42 AM",
+    "database_guid": "e3e55c3c-05ed-40e7-ab7b-222406a2590e",
+    "n_phase_files": "56",
+    "database_file": "demo_data/M4 Example woundhealing/Database/phidbdata.sdf"
+  },
+  "parameter_categories": {
+    "A": {
+      "meaning": "измерено из карты фазы",
+      "parameters": [
+        "area_px",
+        "perimeter_px",
+        "centroid_x_px",
+        "centroid_y_px",
+        "bbox_length_px",
+        "bbox_breadth_px",
+        "eccentricity",
+        "phase_sum_waves",
+        "phase_avg_waves",
+        "phase_max_waves",
+        "phase_min_waves",
+        "phase_std_waves"
+      ]
+    },
+    "B": {
+      "meaning": "требует калибровки прибора",
+      "available": true,
+      "parameters": [
+        "area_um2",
+        "perimeter_um",
+        "bbox_length_um",
+        "bbox_breadth_um",
+        "thickness_avg_um",
+        "thickness_max_um",
+        "opd_avg_um",
+        "opd_max_um",
+        "optical_volume_um3",
+        "dry_mass_pg",
+        "mass_density_pg_um2"
+      ]
+    },
+    "C": {
+      "meaning": "вычислено ГОЛОЦИТом",
+      "parameters": [
+        "shape_irregularity",
+        "shape_convexity",
+        "surface_convexity",
+        "aspect_ratio",
+        "phase_peak_ratio",
+        "surface_roughness_avg",
+        "surface_roughness_rms",
+        "surface_roughness_skew",
+        "surface_roughness_kurt",
+        "roughness_ratio",
+        "texture_contrast",
+        "texture_correlation",
+        "texture_energy",
+        "texture_entropy",
+        "texture_homogeneity",
+        "texture_maxprob",
+        "texture_clustershade",
+        "cell_state"
+      ]
+    }
+  },
+  "outputs": {
+    "cells_csv": "out/Example woundhealing_объекты.csv",
+    "report_pdf": null
+  }
+}

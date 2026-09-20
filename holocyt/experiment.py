@@ -23,6 +23,8 @@ from pathlib import Path
 import numpy as np
 
 from .calibration import Calibration
+from .diagnostics import get_logger
+from .diagnostics.errors import log_exception
 from .optics import OpticalConfig
 from .pipeline import analyze_field, load_model
 from .tox import summarize_group, fit_dose_response, normalize_to_control, ENDPOINTS
@@ -31,11 +33,11 @@ from .tox import summarize_group, fit_dose_response, normalize_to_control, ENDPO
 def read_phase(path, phase_unit="waves"):
     """Читает карту сдвига фазы из файла."""
     path = Path(path)
-    if path.suffix.lower() in (".fmx", ".bin"):
+    if path.suffix.lower() == ".fmx":
         # Родной формат карты фазы штатного ПО микроскопа. Значения уже
         # в долях длины волны, пересчёт не нужен.
         from .importers.hstudio import read_phase_matrix
-        return read_phase_matrix(path)[0]
+        return read_phase_matrix(path).phase
     if path.suffix.lower() in (".tif", ".tiff"):
         import tifffile
         img = tifffile.imread(str(path))
@@ -74,6 +76,7 @@ class Experiment:
     cal: Calibration = dc_field(default_factory=Calibration)
     phase_unit: str = "waves"
     hstudio: object = None        # HstudioExperiment, если импортирован
+    skipped: list = dc_field(default_factory=list)   # (файл, причина)
 
     @property
     def calibrated(self):
@@ -116,18 +119,44 @@ class Experiment:
         seg = load_model("segmenter") if method == "ml" else None
         state = load_model("cellstate") if self.calibrated else None
         nov = load_model("novelty") if self.calibrated else None
+        log = get_logger("experiment")
+        # Зерно фиксировано: повторный анализ тех же данных обязан дать
+        # тот же результат.
+        import numpy as _np
+        from .config import get as _cfg
+        _np.random.seed(int(_cfg("analysis", "random_seed", 20260920)))
+
+        log.info("Анализ «%s»: %d кадров, калибровка %s", self.name,
+                 len(self.records), "есть" if self.calibrated else "нет")
         self.fields = []
+        self.skipped = []
         for i, rec in enumerate(self.records):
-            phase = read_phase(self.root / rec["file"], self.phase_unit)
-            fr = analyze_field(
-                phase, name=rec["file"], cal=self.cal, method=method,
-                min_area_px=min_area_px, seg_model=seg, state_model=state,
-                novelty_model=nov, time_h=float(rec.get("time_h") or 0.0),
-                frame=i, meta=dict(rec),
-            )
+            # Один повреждённый файл не должен обрушить весь эксперимент.
+            try:
+                phase = read_phase(self.root / rec["file"], self.phase_unit)
+                fr = analyze_field(
+                    phase, name=rec["file"], cal=self.cal, method=method,
+                    min_area_px=min_area_px, seg_model=seg, state_model=state,
+                    novelty_model=nov, time_h=float(rec.get("time_h") or 0.0),
+                    frame=i, meta=dict(rec),
+                )
+            except Exception as e:
+                msg, _ = log_exception(log, e, f"кадр {rec['file']}")
+                self.skipped.append((rec["file"], msg))
+                if progress:
+                    progress(i + 1, len(self.records), rec["file"], None)
+                continue
             self.fields.append(fr)
             if progress:
                 progress(i + 1, len(self.records), rec["file"], fr)
+
+        log.info("Обработано %d из %d кадров, объектов %d",
+                 len(self.fields), len(self.records),
+                 sum(f.n_cells for f in self.fields))
+        if self.skipped:
+            log.warning("Пропущено файлов: %d", len(self.skipped))
+            for f, why in self.skipped:
+                log.warning("  %s — %s", f, why)
         return self
 
     # --- сводки ----------------------------------------------------------

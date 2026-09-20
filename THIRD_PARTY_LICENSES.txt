@@ -1,0 +1,56 @@
+СТОРОННИЕ КОМПОНЕНТЫ
+====================
+
+ГОЛОЦИТ использует перечисленные ниже библиотеки с открытым исходным
+кодом. Все они распространяются по разрешительным лицензиям и не
+накладывают ограничений на использование программы.
+
+Закрытых и коммерческих компонентов в поставке нет.
+
+------------------------------------------------------------------
+Python 3.11                     Python Software Foundation License
+    https://www.python.org/
+
+NumPy 2.4.6                     BSD 3-Clause
+    https://numpy.org/
+
+SciPy 1.17.1                    BSD 3-Clause
+    https://scipy.org/
+
+scikit-image 0.26.0             BSD 3-Clause
+    https://scikit-image.org/
+
+scikit-learn 1.9.1              BSD 3-Clause
+    https://scikit-learn.org/
+
+Matplotlib 3.11.2               лицензия Matplotlib (на основе PSF)
+    https://matplotlib.org/
+
+Pillow 12.3.0                   MIT-CMU
+    https://python-pillow.org/
+
+tifffile 2026.3.3               BSD 3-Clause
+    https://github.com/cgohlke/tifffile
+
+joblib 1.6.0                    BSD 3-Clause
+    https://joblib.readthedocs.io/
+
+------------------------------------------------------------------
+Косвенные зависимости
+
+contourpy, cycler, fonttools, imageio, kiwisolver, lazy-loader,
+narwhals, networkx, packaging, pyparsing, python-dateutil, six,
+threadpoolctl, cloudpickle — BSD, MIT и Apache 2.0.
+
+------------------------------------------------------------------
+Шрифт
+
+DejaVu Sans                     DejaVu Fonts License (на основе Bitstream Vera)
+    Входит в состав Matplotlib. Используется для отрисовки кириллицы
+    в отчётах.
+
+------------------------------------------------------------------
+Собственный код
+
+Прикладной код ГОЛОЦИТа и обученные модели разработаны
+самостоятельно и стороннего кода не содержат.

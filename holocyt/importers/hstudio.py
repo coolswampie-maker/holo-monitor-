@@ -53,10 +53,20 @@ from ..calibration import Calibration, from_transfer_xml
 from ..optics import OpticalConfig
 from .provenance import Provenance
 
-FMX_SUFFIXES = (".fmx", ".bin")
+# Поддерживаемое расширение карты фазы. Формат .bin (версия 2010)
+# намеренно НЕ поддержан: его раскладка в памяти не разобрана, и
+# декодирование даёт искажённое изображение (анизотропия соседних
+# разностей 2,15 против 1,00 у корректного кадра). Отдавать такие
+# данные под видом измерений нельзя.
+FMX_SUFFIXES = (".fmx",)
+UNSUPPORTED_SUFFIXES = (".bin",)
 
 # Порядок поиска источников. Калибровка есть только в первом.
-SOURCE_ORDER = ("DBTransferInfo.xml", "imagedb.xml", "*.fmx / *.bin")
+SOURCE_ORDER = ("DBTransferInfo.xml", "imagedb.xml", "*.fmx")
+
+
+class UnsupportedFormat(ValueError):
+    """Формат распознан, но чтение не поддержано."""
 
 
 @dataclass
@@ -85,7 +95,10 @@ def read_phase_matrix(path) -> PhaseMatrix:
     a, b, c, d = struct.unpack("<IIII", raw[:16])
     if a == 1 and b == 2 and 0 < c <= 1 << 16 and 0 < d <= 1 << 16 \
             and len(raw) >= 24 + c * d * 4:
-        w, h, off, ver = c, d, 24, "bin-2010"
+        raise UnsupportedFormat(
+            f"{path.name}: формат карты фазы версии 2010 (.bin) не поддержан. "
+            f"Его раскладка в памяти не разобрана, и чтение даёт искажённое "
+            f"изображение. Используйте эксперименты в формате .fmx.")
     elif 0 < a <= 1 << 16 and 0 < b <= 1 << 16 and len(raw) >= 8 + a * b * 4:
         w, h, off, ver = a, b, 8, "fmx-2017"
     else:
@@ -193,8 +206,15 @@ def detect(path):
         return "experiment"       # каталог эксперимента Hstudio
     if (path / "DBTransferInfo.xml").exists():
         return "transfer"         # выгрузка базы для переноса
-    if any(path.rglob(f"*{s}") for s in FMX_SUFFIXES):
+    # ВНИМАНИЕ: rglob возвращает генератор, и any(генератор) истинно всегда.
+    # Здесь нужна именно проверка на наличие хотя бы одного файла.
+    def _has(suffixes):
+        return any(next(path.rglob(f"*{s}"), None) is not None for s in suffixes)
+
+    if _has(FMX_SUFFIXES):
         return "loose"            # просто карты фазы россыпью
+    if _has(UNSUPPORTED_SUFFIXES):
+        return "unsupported"      # есть карты фазы, но неподдержанной версии
     return None
 
 
@@ -209,6 +229,10 @@ def load_experiment(path) -> HstudioExperiment:
     """Загружает эксперимент Hstudio и фиксирует происхождение величин."""
     path = Path(path)
     layout = detect(path)
+    if layout == "unsupported":
+        raise UnsupportedFormat(
+            f"{path}: найдены карты фазы версии 2010 (.bin), которые "
+            f"программа не читает. Поддерживается формат .fmx.")
     if layout is None:
         raise FileNotFoundError(
             f"{path} не похож на данные Hstudio: нет ни imagedb.xml, "
@@ -240,13 +264,23 @@ def load_experiment(path) -> HstudioExperiment:
             prov.measured("experiment_name", name, "DBTransferInfo.xml")
         files = _sorted_phase_files(
             [path / fr["file"] for fr in frames_meta
-             if fr.get("file") and (path / fr["file"]).exists()])
+             if fr.get("file") and (path / fr["file"]).exists()
+             and Path(fr["file"]).suffix.lower() in FMX_SUFFIXES])
     else:
         files = _sorted_phase_files(
             [p for s in FMX_SUFFIXES for p in path.rglob(f"*{s}")])
 
     if not files:
-        raise FileNotFoundError(f"в {path} не найдено ни одной карты фазы")
+        n_bin = sum(1 for suf in UNSUPPORTED_SUFFIXES for _ in path.rglob(f"*{suf}"))
+        if n_bin:
+            raise UnsupportedFormat(
+                f"В каталоге {path.name} найдено {n_bin} карт фазы версии 2010 "
+                f"(.bin) и ни одной версии .fmx. Формат 2010 года не поддержан: "
+                f"его раскладка в памяти не разобрана, и чтение даёт искажённое "
+                f"изображение. Калибровка из DBTransferInfo.xml при этом читается "
+                f"и может быть применена к другому эксперименту.")
+        raise FileNotFoundError(
+            f"В каталоге {path.name} не найдено ни одной карты фазы (*.fmx).")
     prov.measured("n_phase_files", len(files), str(path))
 
     # Калибровка. Единственный её источник в данных прибора —

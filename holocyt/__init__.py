@@ -1,8 +1,11 @@
-"""ГОЛОЦИТ — анализ безмаркерных голографических изображений клеточных культур.
+"""ГОЛОЦИТ — анализ данных цифровой голографической микроскопии.
 
-Работает поверх данных цифрового голографического микроскопа
-(HoloMonitor M4, Phase Holographic Imaging AB и совместимых QPI-приборов).
+Работает с выгрузкой штатного ПО микроскопа HoloMonitor M4 (Hstudio).
+
+Версия задаётся ровно в одном месте — holocyt/version.py. Всё
+остальное, включая VERSION.txt, порождается из неё.
 """
 
-__version__ = "1.0.0"
-__product__ = "ГОЛОЦИТ"
+from .version import VERSION as __version__, PRODUCT as __product__, SUBTITLE
+
+__all__ = ["__version__", "__product__", "SUBTITLE"]
