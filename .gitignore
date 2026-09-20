@@ -16,3 +16,9 @@ recovery/hstudio_raw.cdr
 recovery/*.zip
 vendor/**/*.exe
 vendor/**/*.pdf
+
+# Данные прибора Phase Holographic Imaging и извлечённое из их
+# установщика в публичный репозиторий не выкладываются.
+demo_data/
+recovery/
+vendor/
