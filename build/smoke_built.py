@@ -74,20 +74,23 @@ def main():
     except Exception as e:
         print(f"  [!] Запуск не удался: {type(e).__name__}: {e}")
         return 1
-    text = (out.stdout + out.stderr).strip()
     if out.returncode != 0:
+        text = (out.stdout + out.stderr).strip()
         print(f"  [!] Программа завершилась с кодом {out.returncode}: {text}")
-        return 1
-    if expected not in text:
-        print(f"  [!] Версия не совпала: ожидалось {expected}, получено {text!r}")
         return 1
 
     # Сначала — стартует ли программа вообще. Иначе отсутствие любого
     # ресурса (например, демо-данных) заслоняет полностью нерабочую сборку.
+    # Версию берём отсюда же: у сборки с собственным окном консоли нет,
+    # и `--version` печатать её некуда.
     ok, detail = probe_startup(exe)
     if not ok:
         print(f"  [!] Собранное приложение не стартует: {detail}")
         return 1
+    if expected not in detail:
+        print(f"  [!] Версия не совпала: ожидалось {expected}, получено {detail!r}")
+        return 1
+    text = f"{expected}"
 
     for need in ("models", "demo_data", "holocyt/web/index.html",
                  "holocyt/config/defaults.yaml"):

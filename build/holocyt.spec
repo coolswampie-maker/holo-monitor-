@@ -27,6 +27,8 @@ datas = [
     (str(root / "demo_data"), "demo_data"),
     (str(root / "VERSION.txt"), "."),
     (str(root / "ABOUT_SOFTWARE.txt"), "."),
+    # Значок нужен и самому окну, а не только исполняемому файлу.
+    (str(root / "assets"), "assets"),
 ]
 datas = [(src, dst) for src, dst in datas if Path(src).exists()]
 
@@ -53,6 +55,11 @@ hiddenimports = [
     #     are using seems to be broken».
     "numpy._core._exceptions",
     "scipy._cyutility",
+    # Окно программы. Штатный hook-webview.py собирает pywebview, но сам
+    # выбор оболочки происходит в runtime по строке, поэтому платформенный
+    # модуль в граф зависимостей не попадает.
+    "webview.platforms.winforms",
+    "webview.platforms.edgechromium",
 ]
 
 # Тяжёлое и ненужное в runtime.
@@ -60,6 +67,10 @@ excludes = [
     "tkinter", "PyQt5", "PyQt6", "PySide2", "PySide6", "wx",
     "IPython", "jupyter", "notebook", "pytest", "sphinx",
     "pandas", "torch", "tensorflow",
+    # pywebview умеет несколько оболочек. На Windows берётся WebView2
+    # через WinForms, остальные тянуть в поставку незачем.
+    "webview.platforms.gtk", "webview.platforms.qt",
+    "webview.platforms.cocoa", "webview.platforms.android",
 ]
 
 a = Analysis(
@@ -92,8 +103,12 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,                 # UPX часто вызывает ложные срабатывания антивируса
-    console=True,              # окно консоли показывает адрес и журнал
-    disable_windowed_traceback=False,
+    # Окно консоли покупателю не показывается: интерфейс живёт в
+    # собственном окне программы, а всё, что раньше печаталось в консоль,
+    # пишется в logs\holocyt.log. Ошибки запуска показываются обычным
+    # окном сообщения Windows.
+    console=False,
+    disable_windowed_traceback=True,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,

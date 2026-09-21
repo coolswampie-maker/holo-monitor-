@@ -68,10 +68,15 @@ def setup_logging(level=None, keep=None):
     except Exception:
         pass                                   # без журнала работать всё равно можно
 
-    sh = logging.StreamHandler()
-    sh.setLevel(logging.WARNING)               # в консоль — только важное
-    sh.setFormatter(logging.Formatter("  %(levelname)s: %(message)s"))
-    log.addHandler(sh)
+    # Вывод в консоль добавляем, только если консоль есть. У сборки с
+    # собственным окном её нет, sys.stderr равен None, и обработчик с
+    # пустым потоком ронял бы каждую запись. Файл журнала при этом
+    # пишется всегда — ошибки не теряются.
+    if sys.stderr is not None:
+        sh = logging.StreamHandler()
+        sh.setLevel(logging.WARNING)           # в консоль — только важное
+        sh.setFormatter(logging.Formatter("  %(levelname)s: %(message)s"))
+        log.addHandler(sh)
 
     _READY = True
     log.info("=" * 60)

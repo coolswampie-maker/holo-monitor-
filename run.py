@@ -9,6 +9,7 @@
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -35,15 +36,28 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=None,
                     help="по умолчанию 8765, при занятости — следующий свободный")
-    ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--browser", action="store_true",
+                    help="для разработки: открыть интерфейс в браузере, "
+                         "а не в окне программы")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="для разработки: только локальный сервер, без окна "
+                         "и без браузера")
     ap.add_argument("--version", action="version", version=f"{PRODUCT} {VERSION}")
     a = ap.parse_args()
 
     log = setup_logging()
     try:
-        from holocyt.webui import serve
-        serve(host=a.host, port=a.port, open_browser=not a.no_browser)
-        return 0
+        # Обычный запуск — собственное окно программы. Браузерные режимы
+        # оставлены для разработки и для проверок: окно требует рабочего
+        # стола, а самодиагностика и сборочный тест работают без него.
+        env_browser = os.environ.get("HOLOCYT_BROWSER_MODE") == "1"
+        if a.no_browser or a.browser or env_browser:
+            from holocyt.webui import serve
+            serve(host=a.host, port=a.port, open_browser=not a.no_browser)
+            return 0
+
+        from holocyt.desktop import run as run_desktop
+        return run_desktop(host=a.host, port=a.port)
     except Exception as exc:
         from holocyt.diagnostics.errors import log_exception
         msg, hint = log_exception(log, exc, "Запуск программы")
