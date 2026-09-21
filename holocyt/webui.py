@@ -227,15 +227,24 @@ def results():
     }
 
 
-def field_png(index, width=900):
+def field_png(index, width=900, overlay=True):
+    """Кадр для галереи: с разметкой или без неё.
+
+    Без разметки показывается та же карта фазы, только без контуров —
+    так видно, что именно программа выделила. Ничего не пересчитывается:
+    отрисовка берёт уже готовый результат анализа. Подпись кадра рисует
+    интерфейс, поэтому в самой картинке её нет.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fr = STATE["experiment"].fields[index]
     h, w = fr.labels.shape
     fig, ax = plt.subplots(figsize=(width / 100, width / 100 * h / w))
-    overlay_axes(ax, fr.phase, fr.labels, fr.states if fr.calibrated else None,
-                 title=f"{Path(fr.name).name} — объектов {fr.n_cells}")
+    overlay_axes(ax, fr.phase,
+                 fr.labels if overlay else None,
+                 fr.states if (overlay and fr.calibrated) else None,
+                 title="")
     fig.tight_layout(pad=0.4)
     buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=100); plt.close(fig)
     return buf.getvalue()
@@ -282,7 +291,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/results":
                 return self._send(200, results())
             if u.path == "/api/field.png":
-                return self._send(200, field_png(int(q.get("i", ["0"])[0])), "image/png")
+                return self._send(200, field_png(
+                    int(q.get("i", ["0"])[0]),
+                    overlay=q.get("overlay", ["1"])[0] != "0"), "image/png")
             if u.path in ("/api/report.pdf", "/api/cells.csv"):
                 key = "report" if u.path.endswith(".pdf") else "csv"
                 path = STATE.get(key)
