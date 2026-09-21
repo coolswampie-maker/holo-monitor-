@@ -244,3 +244,36 @@ def render(md_text, out_pdf, title, subtitle="", extra=(), images=None):
             doc.table(table)
         doc.close()
     return out_pdf
+
+
+#: Что во что собирается: исходник -> файл, заголовок, подзаголовок.
+DOCUMENTS = (
+    ("quick_start.md", "Quick_Start_RU.pdf",
+     "Быстрый старт", "Как открыть эксперимент и получить отчёт"),
+    ("user_manual.md", "User_Manual_RU.pdf",
+     "Руководство пользователя", "Полное описание работы программы"),
+    ("build_guide.md", "Windows_Build_Guide_RU.pdf",
+     "Сборка на Windows", "Для службы информационных технологий"),
+)
+
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path as _P
+
+    root = _P(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root))
+    from holocyt.version import VERSION
+
+    src = root / "docs" / "src"
+    out = root / "docs"
+    images = {p.name: str(p) for p in out.glob("*.png")}
+    for name, pdf, title, subtitle in DOCUMENTS:
+        md = src / name
+        if not md.exists():
+            print(f"  нет исходника: {md}")
+            continue
+        render(md.read_text(encoding="utf-8"), out / pdf, title, subtitle,
+               extra=(("Версия", VERSION),), images=images)
+        size = (out / pdf).stat().st_size / 1024
+        print(f"  {pdf:28} {size:6.0f} КБ  ← {name}")
