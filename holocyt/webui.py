@@ -379,6 +379,19 @@ class _Server(ThreadingHTTPServer):
     allow_reuse_address = not sys.platform.startswith("win")
 
 
+def start_server(host="127.0.0.1", port=None):
+    """Поднимает интерфейс в отдельном потоке и возвращает (сервер, адрес).
+
+    Нужно окну программы: само окно создаётся в главном потоке, а
+    сервер должен работать рядом. Для запуска из консоли есть serve(),
+    которая на этом же сервере просто блокируется.
+    """
+    port = find_free_port(port or 8765, host)
+    srv = _Server((host, port), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://{host}:{port}/"
+
+
 def serve(host="127.0.0.1", port=None, open_browser=True):
     from .diagnostics import setup_logging, log_path
     log = setup_logging()
