@@ -79,7 +79,33 @@ def can_print_unicode():
         return False
 
 
+def silence_known_deprecations():
+    """Гасит два известных предупреждения scikit-image 0.26.
+
+    `remove_small_objects(min_size=...)` и
+    `remove_small_holes(area_threshold=...)` объявлены устаревшими.
+    Переход на `max_size` — не переименование: у нового параметра другая
+    граница (отбрасывается «меньше или равно» вместо «меньше»), поэтому
+    менять вызовы без перепроверки сегментации нельзя. Задача записана
+    в FUTURE.md.
+
+    До неё эти два предупреждения печатаются по два на кадр и забивают
+    окно программы: на восьми кадрах — шестнадцать абзацев поверх
+    полезного вывода. Гасим строго их, по тексту сообщения и версии
+    библиотеки. Всё остальное — RuntimeWarning, ошибки чтения,
+    исключения — проходит как обычно.
+    """
+    import warnings
+    for param in ("min_size", "area_threshold"):
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Parameter `%s` is deprecated since version 0\.26" % param,
+            category=FutureWarning,
+        )
+
+
 def setup(blas_threads=4):
     """Полная подготовка окружения. Вызывается первой строкой в точках входа."""
     limit_blas_threads(blas_threads)
     force_utf8_output()
+    silence_known_deprecations()
